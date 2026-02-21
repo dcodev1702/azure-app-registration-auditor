@@ -91,6 +91,53 @@ Write-Host "  Application (client) ID : $($app.AppId)" -ForegroundColor Green
 Write-Host "  Object ID               : $($app.Id)" -ForegroundColor Green
 
 # ============================================================
+# STEP 2b: Add Microsoft Graph API Application permissions
+# ============================================================
+Write-Host "`n=== STEP 2b: Adding Microsoft Graph API permissions ===" -ForegroundColor Cyan
+
+# Microsoft Graph well-known AppId
+$graphAppId = "00000003-0000-0000-c000-000000000000"
+
+# Application (Role) permission IDs for Microsoft Graph
+$graphPermissions = @(
+    @{ Id = "b0afded3-3588-46d8-8b3d-9842eff778da"; Name = "AuditLog.Read.All" }
+    @{ Id = "72f0655d-6228-4ddc-8e1b-164973b9213b"; Name = "CopilotPackages.Read.All" }
+    @{ Id = "7438b122-aefc-4978-80ed-43db9fcc7715"; Name = "Device.Read.All" }
+    @{ Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61"; Name = "Directory.Read.All" }
+    @{ Id = "246dd0d5-5bd0-4def-940b-0421030a5b68"; Name = "Policy.Read.All" }
+    @{ Id = "dd98c7f5-2d42-42d3-a0e4-633161547251"; Name = "ThreatHunting.Read.All" }
+    @{ Id = "df021288-bdef-4463-88db-98f22de89214"; Name = "User.Read.All" }
+)
+
+# Build the ResourceAccess array
+$resourceAccessList = $graphPermissions | ForEach-Object {
+    @{ Id = $_.Id; Type = "Role" }
+}
+
+# Update the app registration with required resource access
+$graphResourceAccess = @{
+    ResourceAppId  = $graphAppId
+    ResourceAccess = $resourceAccessList
+}
+
+# Use Invoke-AzRestMethod to PATCH the application with the required permissions
+$patchBody = @{
+    requiredResourceAccess = @(
+        @{
+            resourceAppId  = $graphAppId
+            resourceAccess = $resourceAccessList
+        }
+    )
+} | ConvertTo-Json -Depth 10
+
+Invoke-AzRestMethod -Uri "https://graph.microsoft.com/v1.0/applications/$($app.Id)" -Method PATCH -Payload $patchBody | Out-Null
+
+Write-Host "  Graph API permissions added:" -ForegroundColor Green
+foreach ($p in $graphPermissions) {
+    Write-Host "    - $($p.Name) (Application)" -ForegroundColor Green
+}
+
+# ============================================================
 # STEP 3: Upload the certificate to the app registration
 # ============================================================
 Write-Host "`n=== STEP 3: Uploading certificate to app registration ===" -ForegroundColor Cyan
@@ -127,10 +174,18 @@ Write-Host "  Secret Hint: $($secretCred.Hint)" -ForegroundColor Green
 Write-Host "  Expires    : $($secretCred.EndDateTime)" -ForegroundColor Green
 
 # IMPORTANT: Save the secret value now — it cannot be retrieved later
+$appRegSecPath = Join-Path $PSScriptRoot "appRegSec.json"
 if ($secretCred.SecretText) {
-    Write-Host "  SECRET VALUE: $($secretCred.SecretText)" -ForegroundColor Yellow
-    Write-Host "  >>> SAVE THIS NOW — it will NOT be shown again <<<" -ForegroundColor Red
     $clientSecret = $secretCred.SecretText
+
+    # Write client secret and client ID to JSON for later use
+    @{
+        client_secret = $clientSecret
+        client_id     = $app.AppId
+    } | ConvertTo-Json | Set-Content -Path $appRegSecPath -Encoding UTF8
+
+    Write-Host "  Secret written to: $appRegSecPath" -ForegroundColor Green
+    Write-Host "  >>> DO NOT commit this file to source control <<<" -ForegroundColor Red
 } else {
     Write-Host "  (SecretText not returned — check Azure Portal for the value)" -ForegroundColor DarkYellow
 }
@@ -149,6 +204,42 @@ if (-not $sp) {
 }
 
 # ============================================================
+# STEP 5b: Grant admin consent for Microsoft Graph permissions
+# ============================================================
+Write-Host "`n=== STEP 5b: Granting admin consent for Graph API permissions ===" -ForegroundColor Cyan
+
+# Get the Microsoft Graph service principal in the tenant
+$graphSp = Get-AzADServicePrincipal -Filter "appId eq '$graphAppId'" -ErrorAction SilentlyContinue
+
+if ($graphSp) {
+    foreach ($perm in $graphPermissions) {
+        # Check if already granted
+        $existing = Invoke-AzRestMethod -Uri "https://graph.microsoft.com/v1.0/servicePrincipals/$($sp.Id)/appRoleAssignments" -Method GET
+        $existingGrants = ($existing.Content | ConvertFrom-Json).value
+        $alreadyGranted = $existingGrants | Where-Object { $_.appRoleId -eq $perm.Id }
+
+        if (-not $alreadyGranted) {
+            $grantBody = @{
+                principalId = $sp.Id
+                resourceId  = $graphSp.Id
+                appRoleId   = $perm.Id
+            } | ConvertTo-Json
+
+            $result = Invoke-AzRestMethod -Uri "https://graph.microsoft.com/v1.0/servicePrincipals/$($sp.Id)/appRoleAssignments" -Method POST -Payload $grantBody
+            if ($result.StatusCode -eq 201) {
+                Write-Host "  Admin consent granted: $($perm.Name)" -ForegroundColor Green
+            } else {
+                Write-Host "  Failed to grant $($perm.Name): HTTP $($result.StatusCode)" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "  Already consented: $($perm.Name)" -ForegroundColor Yellow
+        }
+    }
+} else {
+    Write-Host "  Microsoft Graph service principal not found in tenant." -ForegroundColor Red
+}
+
+# ============================================================
 # STEP 6: Create resource group + storage account (Entra ID only)
 # ============================================================
 Write-Host "`n=== STEP 6: Creating storage account '$storageAcctName' ===" -ForegroundColor Cyan
@@ -162,7 +253,7 @@ if (-not $rg) {
     Write-Host "Resource group '$resourceGroup' already exists." -ForegroundColor Yellow
 }
 
-# Create storage account with Entra ID-only auth
+# Create storage account with Entra ID-only auth + ADLSv2 (hierarchical namespace)
 $sa = Get-AzStorageAccount -ResourceGroupName $resourceGroup -Name $storageAcctName -ErrorAction SilentlyContinue
 if (-not $sa) {
     $sa = New-AzStorageAccount `
@@ -171,11 +262,17 @@ if (-not $sa) {
         -Location $location `
         -SkuName "Standard_LRS" `
         -Kind "StorageV2" `
+        -EnableHierarchicalNamespace $true `
         -AllowBlobPublicAccess $false `
         -AllowSharedKeyAccess $false `
         -MinimumTlsVersion "TLS1_2"
 
-    Write-Host "Storage account created with Entra ID-only auth." -ForegroundColor Green
+    # Disable File, Table, and Queue services — blob only
+    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType File -IsDisabled $true -ErrorAction SilentlyContinue
+    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType Queue -IsDisabled $true -ErrorAction SilentlyContinue
+    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType Table -IsDisabled $true -ErrorAction SilentlyContinue
+
+    Write-Host "Storage account created with Entra ID-only auth + ADLSv2 (blob only)." -ForegroundColor Green
 } else {
     # Ensure settings are correct on existing account
     Set-AzStorageAccount `
@@ -263,10 +360,11 @@ Connect-AzAccount ``
     -CertificateThumbprint '$($cert.Thumbprint)'
 "@ -ForegroundColor White
 
-Write-Host "`n--- Option B: Client Secret Auth ---" -ForegroundColor Cyan
+Write-Host "`n--- Option B: Client Secret Auth (reads from appRegSec.json) ---" -ForegroundColor Cyan
 Write-Host @"
-`$secureSecret = ConvertTo-SecureString 'INSERT_YOUR_CLIENT_SECRET_HERE' -AsPlainText -Force
-`$credential = New-Object System.Management.Automation.PSCredential('$($app.AppId)', `$secureSecret)
+`$appRegSec = Get-Content './appRegSec.json' | ConvertFrom-Json
+`$secureSecret = ConvertTo-SecureString `$appRegSec.client_secret -AsPlainText -Force
+`$credential = New-Object System.Management.Automation.PSCredential(`$appRegSec.client_id, `$secureSecret)
 Connect-AzAccount ``
     -ServicePrincipal ``
     -Credential `$credential ``
