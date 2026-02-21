@@ -6,9 +6,9 @@
 .DESCRIPTION
     This script enumerates all Azure AD app registrations (excluding configurable patterns),
     and for each app collects:
-      - Azure RBAC role assignments (via the associated service principal)
-      - API permissions (application and delegated), resolved to human-readable names
-      - Credentials: client secrets (with hint) and certificates (with thumbprint),
+        - Azure RBAC role assignments (via the associated service principal)
+        - API permissions (application and delegated), resolved to human-readable names
+        - Credentials: client secrets (with hint) and certificates (with thumbprint),
         including expiration status (Active, EXPIRING SOON, EXPIRED)
 
     If multiple subscriptions are available, an interactive arrow-key menu is presented
@@ -93,7 +93,8 @@ Set-AzContext -Subscription $selectedSub.Id | Out-Null
 
 # Exclude patterns
 $excludeApps = @(
-    "^ConnectSyncProvisioning"
+    "^ConnectSyncProvisioning",
+    "^GraphEmulationTool"
 )
 $excludeAppsRegex = ($excludeApps -join "|")
 
@@ -163,8 +164,8 @@ foreach ($app in $apps) {
 
     foreach ($cred in $creds) {
         $status = if ($cred.EndDateTime -lt (Get-Date)) { "EXPIRED" }
-                  elseif ($cred.EndDateTime -lt (Get-Date).AddDays(30)) { "EXPIRING SOON" }
-                  else { "Active" }
+                elseif ($cred.EndDateTime -lt (Get-Date).AddDays(30)) { "EXPIRING SOON" }
+                else { "Active" }
 
         # Determine type: if Hint is populated it's a secret, otherwise a certificate
         $isSecret = [bool]$cred.Hint
