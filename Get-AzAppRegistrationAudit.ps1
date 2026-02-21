@@ -18,13 +18,13 @@
     This script takes no parameters. Subscription selection is interactive.
 
 .EXAMPLE
-    .\app_reg_details.ps1
+    .\Get-AzAppRegistrationAudit.ps1
 
     Runs the audit against the selected subscription and outputs role assignments,
     API permissions, and credentials for all app registrations.
 
 .EXAMPLE
-    .\app_reg_details.ps1 | Out-File -FilePath report.txt
+    .\Get-AzAppRegistrationAudit.ps1 | Out-File -FilePath report.txt
 
     Runs the audit and saves the output to a text file.
 
@@ -159,8 +159,23 @@ foreach ($app in $apps) {
         }
     }
 
-    # --- CREDENTIALS (via Get-AzADAppCredential) ---
+    # --- CREDENTIALS (via Get-AzADAppCredential + Graph API for cert thumbprints) ---
     $creds = Get-AzADAppCredential -ObjectId $app.Id -ErrorAction SilentlyContinue
+
+    # Build a KeyId -> thumbprint lookup from the Graph API keyCredentials
+    # (Get-AzADAppCredential's CustomKeyIdentifier is NOT the real thumbprint)
+    $certThumbprintLookup = @{}
+    $graphApp = Invoke-AzRestMethod -Uri "https://graph.microsoft.com/v1.0/applications/$($app.Id)?`$select=keyCredentials" -Method GET -ErrorAction SilentlyContinue
+    if ($graphApp -and $graphApp.StatusCode -eq 200) {
+        $keyCreds = ($graphApp.Content | ConvertFrom-Json).keyCredentials
+        # Only AsymmetricX509Cert entries have the real SHA-1 thumbprint in customKeyIdentifier
+        foreach ($kc in ($keyCreds | Where-Object { $_.type -eq 'AsymmetricX509Cert' -and $_.usage -eq 'Verify' })) {
+            if ($kc.customKeyIdentifier) {
+                # Graph returns customKeyIdentifier as a hex string (the SHA-1 thumbprint) — use it directly
+                $certThumbprintLookup[$kc.keyId.ToString()] = $kc.customKeyIdentifier.ToUpper()
+            }
+        }
+    }
 
     foreach ($cred in $creds) {
         $status = if ($cred.EndDateTime -lt (Get-Date)) { "EXPIRED" }
@@ -171,12 +186,15 @@ foreach ($app in $apps) {
         $isSecret = [bool]$cred.Hint
 
         $thumbprint = "N/A"
-        if (-not $isSecret -and $cred.CustomKeyIdentifier) {
-            try {
-                $thumbprint = [System.Convert]::ToHexString($cred.CustomKeyIdentifier)
-            } catch {
-                $thumbprint = ($cred.CustomKeyIdentifier | ForEach-Object { '{0:X2}' -f $_ }) -join ''
+        if (-not $isSecret) {
+            # Use the Graph API thumbprint lookup (matches AADServicePrincipalSignInLogs)
+            # Try exact KeyId match first, then scan all entries (KeyIds may differ between cmdlet and Graph)
+            $thumbprint = $certThumbprintLookup[$cred.KeyId.ToString()]
+            if (-not $thumbprint -and $certThumbprintLookup.Count -gt 0) {
+                # Fallback: use the first (usually only) cert thumbprint
+                $thumbprint = $certThumbprintLookup.Values | Select-Object -First 1
             }
+            if (-not $thumbprint) { $thumbprint = "N/A" }
         }
 
         $credResults += [PSCustomObject]@{
