@@ -310,7 +310,7 @@ After running `New-DemoDfirAppSetup.ps1`, execute `Get-AzAppRegistrationAudit.ps
 - **API Permissions** — shows the Microsoft Graph `User.Read.All` application permission
 - **Credentials** — shows **both** the client secret (with hint) **and** the certificate (with thumbprint and expiration)
 
-This demonstrates exactly why `Get-AzAppRegistrationAudit.ps1` is valuable: in a real environment with dozens or hundreds of app registrations, it gives you immediate visibility into which apps have credentials, when they expire, what roles they hold, and what APIs they can call — information that is critical for incident response, credential rotation planning, and security posture assessment.
+This demonstrates exactly why `Get-AzAppRegistrationAudit.ps1` is valuable: in a real environment with hundreds or thousands of app registrations, it gives you immediate visibility into which apps have credentials, when they expire, what roles they hold, and what APIs they can call — information that is critical for incident response, credential rotation planning, and security posture assessment.
 
 ---
 
