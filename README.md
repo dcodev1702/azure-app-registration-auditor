@@ -143,7 +143,7 @@ Patterns use PowerShell regex (e.g., `^` matches the start of the display name).
 
 ---
 
-## Digital Forensics / Incident Response (DFIR) PoC — `New-DemoDfirAppSetup.ps1`
+## 🏆 Digital Forensics / Incident Response (DFIR) PoC — `New-DemoDfirAppSetup.ps1`
 
 This script creates a fully functional proof-of-concept environment that demonstrates how app registrations use secrets and certificates to authenticate, and why auditing them matters from a DFIR perspective.
 
