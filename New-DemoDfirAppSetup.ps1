@@ -104,19 +104,14 @@ $graphPermissions = @(
     @{ Id = "72f0655d-6228-4ddc-8e1b-164973b9213b"; Name = "CopilotPackages.Read.All" }
     @{ Id = "7438b122-aefc-4978-80ed-43db9fcc7715"; Name = "Device.Read.All" }
     @{ Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61"; Name = "Directory.Read.All" }
+    @{ Id = "246dd0d5-5bd0-4def-940b-0421030a5b68"; Name = "Policy.Read.All" }
     @{ Id = "dd98c7f5-2d42-42d3-a0e4-633161547251"; Name = "ThreatHunting.Read.All" }
     @{ Id = "df021288-bdef-4463-88db-98f22de89214"; Name = "User.Read.All" }
 )
 
-# Build the ResourceAccess array
+# Build the resourceAccess array (Graph API requires camelCase: id, type)
 $resourceAccessList = $graphPermissions | ForEach-Object {
-    @{ Id = $_.Id; Type = "Role" }
-}
-
-# Update the app registration with required resource access
-$graphResourceAccess = @{
-    ResourceAppId  = $graphAppId
-    ResourceAccess = $resourceAccessList
+    @{ id = $_.Id; type = "Role" }
 }
 
 # Use Invoke-AzRestMethod to PATCH the application with the required permissions
