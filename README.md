@@ -212,7 +212,8 @@ Connect-AzAccount `
     -CertificateThumbprint '<thumbprint>'
 ```
 
-> [!IMPORTANT] You must be on the machine where the PFX was imported. The private key never leaves the local certificate store — Entra ID only has the public key.
+> [!IMPORTANT]
+> You must be on the machine where the PFX was imported. The private key never leaves the local certificate store — Entra ID only has the public key.
 
 #### Option B: Client Secret Authentication
 
