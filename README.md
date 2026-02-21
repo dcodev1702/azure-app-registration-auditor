@@ -114,7 +114,7 @@ Both scripts print results directly to the terminal with color-coded sections:
 - **Subscription-Level Contributors** with display names
 - A **user-to-role mapping table** with subscription, display name, UPN, Entra directory roles, contributor flag, RBAC role, and scope
 
-![IMAGE](https://github.com/user-attachments/assets/69526e47-48ad-4c08-88e3-4f2dc7086939)
+![IMAGE](https://github.com/user-attachments/assets/57a0d03d-f390-454d-bbe3-ed03a1dcdc57)
 
 
 ### CSV Export
