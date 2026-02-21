@@ -294,7 +294,7 @@ storageOps
 | order by StorageTime asc
 ```
 
-![image](https://github.com/user-attachments/assets/3bc7cef8-6ae6-4507-b14f-d85c615b7b92)
+![image](https://github.com/user-attachments/assets/3185a91d-c05e-432d-bbbf-c1f630832327)
 
 
 **Why this matters for DFIR:** If an attacker compromises a client secret or exports a certificate private key, this join tells you:
