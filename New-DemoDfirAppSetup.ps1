@@ -267,10 +267,10 @@ if (-not $sa) {
         -AllowSharedKeyAccess $false `
         -MinimumTlsVersion "TLS1_2"
 
-    # Disable File, Table, and Queue services — blob only
-    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType File -IsDisabled $true -ErrorAction SilentlyContinue
-    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType Queue -IsDisabled $true -ErrorAction SilentlyContinue
-    Update-AzStorageServiceProperty -ResourceGroupName $resourceGroup -StorageAccountName $storageAcctName -ServiceType Table -IsDisabled $true -ErrorAction SilentlyContinue
+    # Note: File, Queue, and Table services cannot be individually disabled on StorageV2.
+    # However, with shared key access disabled, only Entra ID (OAuth) auth works —
+    # and the RBAC role (Storage Blob Data Contributor) only grants blob access.
+    # File, Queue, and Table are effectively inaccessible.
 
     Write-Host "Storage account created with Entra ID-only auth + ADLSv2 (blob only)." -ForegroundColor Green
 } else {
