@@ -163,7 +163,7 @@ storageOps
 | project
     StorageTime,
     SignInTime,
-    SAAccountName=AccountName,
+    SA_AccountName=AccountName,
     ServicePrincipalName,
     ServicePrincipalId=AppId,
     OperationName,
@@ -173,7 +173,7 @@ storageOps
     CertThumbprint,          // <-- populated for cert auth only
     AuthenticationHash,      // <-- storage-side token fingerprint
     CallerIpAddress,
-    WAN_IP=IPAddress,
+    IPAddress,
     Uri
 | order by StorageTime asc
 ```
