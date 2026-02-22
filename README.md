@@ -190,11 +190,20 @@ Entra ID supports two permission models for app registrations:
 | **Delegated** | App acts **on behalf of** a signed-in user | Yes | Interactive apps, web apps with user sign-in |
 | **Application** | App acts **as itself** (service principal) | No | Background services, daemons, automation scripts |
 
-`demo_dfir_app` is configured with **Application** permissions — it authenticates as a service principal with no user context. The following Microsoft Graph API permissions are assigned:
+`demo_dfir_app` is configured with **Application** permissions — it authenticates as a service principal with no user context. The following [Microsoft Graph API](https://learn.microsoft.com/en-us/graph/overview) permissions are assigned:
 
-| API / Resource | Permission | Type |
-|---------------|------------|------|
-| Microsoft Graph | `User.Read.All` | Application |
+| API / Resource | Permission | Type | Purpose |
+|---------------|------------|------|----------|
+| Microsoft Graph | `AuditLog.Read.All` | Application | Read Entra ID audit and sign-in logs |
+| Microsoft Graph | `CopilotPackages.Read.All` | Application | Read Copilot packages information |
+| Microsoft Graph | `Device.Read.All` | Application | Read device configuration information |
+| Microsoft Graph | `Directory.Read.All` | Application | Read directory data (users, groups, roles) |
+| Microsoft Graph | `ThreatHunting.Read.All` | Application | Run advanced hunting queries via Defender XDR |
+| Microsoft Graph | `User.Read.All` | Application | Read all user profiles |
+
+All permissions are granted with **admin consent** so the service principal can operate without user interaction.
+
+> **Example — `ThreatHunting.Read.All`:** This scope enables the app to call `POST /security/runHuntingQuery` against the [Microsoft Graph Security API](https://learn.microsoft.com/en-us/graph/api/security-security-runhuntingquery), executing KQL queries against Microsoft Defender XDR advanced hunting tables programmatically. This is particularly valuable for automated DFIR workflows and integration with Copilot for Security.
 
 The storage account access is controlled via Azure RBAC (`Storage Blob Data Contributor`), not Graph API permissions — this is the recommended pattern for Azure resource access.
 
@@ -294,9 +303,6 @@ storageOps
 | order by StorageTime asc
 ```
 
-![image](https://github.com/user-attachments/assets/3185a91d-c05e-432d-bbbf-c1f630832327)
-
-
 **Why this matters for DFIR:** If an attacker compromises a client secret or exports a certificate private key, this join tells you:
 - **Which credential** was used (cert or secret, by KeyId)
 - **From where** (IP address correlation)
@@ -310,10 +316,10 @@ This is the forensic chain from credential to data exfiltration.
 After running `New-DemoDfirAppSetup.ps1`, execute `Get-AzAppRegistrationAudit.ps1` to see the demo app in action:
 
 - **Role Assignments** — shows `demo_dfir_app` with `Storage Blob Data Contributor` scoped to the storage account
-- **API Permissions** — shows the Microsoft Graph `User.Read.All` application permission
+- **API Permissions** — shows the Microsoft Graph Application permissions (`AuditLog.Read.All`, `CopilotPackages.Read.All`, `Device.Read.All`, `Directory.Read.All`, `ThreatHunting.Read.All`, `User.Read.All`)
 - **Credentials** — shows **both** the client secret (with hint) **and** the certificate (with thumbprint and expiration)
 
-This demonstrates exactly why `Get-AzAppRegistrationAudit.ps1` is valuable: in a real environment with hundreds or thousands of app registrations, it gives you immediate visibility into which apps have credentials, when they expire, what roles they hold, and what APIs they can call — information that is critical for incident response, credential rotation planning, and security posture assessment.
+This demonstrates exactly why `Get-AzAppRegistrationAudit.ps1` is valuable: in a real environment with dozens or hundreds of app registrations, it gives you immediate visibility into which apps have credentials, when they expire, what roles they hold, and what APIs they can call — information that is critical for incident response, credential rotation planning, and security posture assessment.
 
 ---
 
