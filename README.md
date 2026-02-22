@@ -125,21 +125,24 @@ Each credential type (secret vs. certificate) produces a **different `Authentica
 
 ```kusto
 // Join service principal sign-ins with storage blob access logs
-// Determines WHICH credential (cert vs secret) was used for each storage operation
+// to determine WHICH credential (cert vs secret) was used for each storage operation
 let spSignIns = AADServicePrincipalSignInLogs
-    | where TimeGenerated > ago(7d)
-    | where AppId == "<your-app-id>"
+    | where TimeGenerated > ago(1d)
+    | where AppId == "b7ed0e3d-db63-4b17-bb3a-09ea1fdc7e69"  // demo_dfir_app AppId
     | project
         SignInTime = TimeGenerated,
         AppId,
         ServicePrincipalName,
+        ServicePrincipalId,
         ClientCredentialType,
         CredentialKeyId = ServicePrincipalCredentialKeyId,
         CertThumbprint = ServicePrincipalCredentialThumbprint,
         IPAddress,
-        ResourceDisplayName;
+        ResourceDisplayName,
+        CorrelationId,
+        ResultType;
 let storageOps = StorageBlobLogs
-    | where TimeGenerated > ago(7d)
+    | where TimeGenerated > ago(1d)
     | where AccountName == "demodfirsa007"
     | where AuthenticationType == "OAuth"
     | project
@@ -148,25 +151,29 @@ let storageOps = StorageBlobLogs
         OperationName,
         AuthenticationHash,
         RequesterAppId,
+        RequesterObjectId,
         CallerIpAddress,
         Uri,
-        StatusCode;
+        StatusCode,
+        StatusText;
+// Join on the service principal/app identity and a close time window
 storageOps
 | join kind=inner (spSignIns) on $left.RequesterAppId == $right.AppId
-| where abs(datetime_diff('second', StorageTime, SignInTime)) < 120
+| where abs(datetime_diff('second', StorageTime, SignInTime)) < 120  // within 2 min window
 | project
     StorageTime,
     SignInTime,
-    AccountName,
+    SAAccountName=AccountName,
+    ServicePrincipalName,
+    ServicePrincipalId=AppId,
     OperationName,
     StatusCode,
-    ClientCredentialType,
-    CredentialKeyId,
-    CertThumbprint,
-    AuthenticationHash,
+    ClientCredentialType,    // <-- "Certificate" or "ClientSecret"
+    CredentialKeyId,         // <-- matches KeyId from app registration
+    CertThumbprint,          // <-- populated for cert auth only
+    AuthenticationHash,      // <-- storage-side token fingerprint
     CallerIpAddress,
-    IPAddress,
-    ServicePrincipalName,
+    WAN_IP=IPAddress,
     Uri
 | order by StorageTime asc
 ```
