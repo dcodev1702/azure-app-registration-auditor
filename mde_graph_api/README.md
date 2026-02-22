@@ -77,6 +77,29 @@ An app registration is required with the following API permissions granted and a
 
 Configure permissions in the [Azure Portal — App Registrations](https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade).
 
+> [!TIP]
+> Use `Invoke-MDEAppRegistrationSetup.ps1` (included in this directory) to create the app registration, assign all permissions, grant admin consent, and generate `appConfig.json` automatically — no portal GUI click-ops required!
+
+### Automated App Registration Setup
+
+`Invoke-MDEAppRegistrationSetup.ps1` provisions everything programmatically:
+
+1. Creates an app registration (`mde_device_manager`) in Entra ID
+2. Creates a service principal for the app
+3. Assigns **Application** permissions to both APIs:
+   - **WindowsDefenderATP** — `Machine.Read.All`, `Machine.Isolate`
+   - **Microsoft Graph** — `ThreatHunting.Read.All`, `RoleManagement.Read.Directory`
+4. Grants **admin consent** for all four permissions
+5. Creates a client secret (36-month validity) with a named description
+6. Writes `appConfig.json` with `client_id`, `client_secret`, `tenant_id`, and `subscription_id`
+
+```powershell
+# Run from the mde_graph_api directory
+./Invoke-MDEAppRegistrationSetup.ps1
+```
+
+The script requires an active `Connect-AzAccount` session with permissions to create app registrations and grant admin consent (typically Global Administrator or Application Administrator).
+
 ### `appConfig.json`
 
 Create an `appConfig.json` file in the same directory as the script with your app registration credentials:
