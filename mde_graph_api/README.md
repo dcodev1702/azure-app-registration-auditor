@@ -77,7 +77,8 @@ Create an `appConfig.json` file in the same directory as the script with your ap
 }
 ```
 
-> **Security note:** Do not commit `appConfig.json` to source control. Add it to your `.gitignore`.
+> [!note]
+> Do not commit `appConfig.json` to source control. Add it to your `.gitignore`.
 
 ---
 
