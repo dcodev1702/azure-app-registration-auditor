@@ -2,7 +2,10 @@
 
 A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint (MDE) enrolled devices, displays real-time sensor health and version information, and provides an interactive menu to **isolate** or **unisolate** machines.
 
-![image](https://github.com/user-attachments/assets/1666be84-a969-4405-b0ff-078c3f0fc2ed)
+![image](https://github.com/user-attachments/assets/7f3b42aa-d173-486e-84df-c4bb2d3ee1be)
+
+
+<!-- ![image](https://github.com/user-attachments/assets/1666be84-a969-4405-b0ff-078c3f0fc2ed) -->
 
 ---
 
