@@ -1,4 +1,4 @@
-# action-devices.ps1 — MDE Device Isolation Manager
+# MDE Device Isolation Manager
 
 A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint (MDE) enrolled devices, displays real-time sensor health and version information, and provides an interactive menu to **isolate** or **unisolate** machines.
 
