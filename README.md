@@ -1,6 +1,11 @@
-# Entra App Registration Auditor
+# Entra ID - Application Registration Auditor
 
 A collection of PowerShell scripts for auditing Entra ID App Registrations, Entra ID users, and RBAC role assignments. Designed for security professionals, cloud administrators, and incident responders who need quick visibility into their Azure tenant's identity and access posture.
+
+### 📖 Learn More
+- [What is Microsoft Entra ID?](https://learn.microsoft.com/en-us/entra/fundamentals/whatis) — Identity and access management service for Azure and Microsoft 365
+- [Application and service principal objects in Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals) — How app registrations, service principals, and managed identities relate
+- [Overview of Microsoft Graph](https://learn.microsoft.com/en-us/graph/overview) — The unified API for accessing identity, security, and M365 data programmatically
 
 ---
 
