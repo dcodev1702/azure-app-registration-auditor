@@ -10,13 +10,13 @@ A collection of PowerShell scripts for auditing Entra ID App Registrations, Entr
 ---
 
 ## 🏆 Digital Forensics / Incident Response (DFIR) PoC
-`New-DemoDfirAppSetup.ps1`
+`Invoke-DemoDfirAppSetup.ps1`
 
 This script creates a fully functional proof-of-concept environment that demonstrates how app registrations use secrets and certificates to authenticate, and why auditing them matters from a DFIR perspective.
 
 ### What It Creates
 
-`New-DemoDfirAppSetup.ps1` provisions the following resources end-to-end:
+`Invoke-DemoDfirAppSetup.ps1` provisions the following resources end-to-end:
 
 1. **Self-signed certificate** (RSA 2048-bit, SHA-256, 36-month validity)
    - Exported as a `.pfx` file (private + public key) and a `.cer` file (public key only)
