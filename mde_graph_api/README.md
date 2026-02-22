@@ -4,7 +4,7 @@ A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint
 
 ![image](https://github.com/user-attachments/assets/4ae7b2ec-848b-40d2-b7b9-944d51e714ee)
 
-Graph & WindowsDefenderATP API (Application Registration) actions verified via the Defender XDR portal
+Graph & WindowsDefenderATP API (Application Registration: Azure PowerShell) actions verified via the Defender XDR portal
 
 ![image](https://github.com/user-attachments/assets/0eacc592-d3c4-4546-ad05-710649525cc7)
 
