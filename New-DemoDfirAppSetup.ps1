@@ -28,6 +28,21 @@
 #>
 
 # ============================================================
+# ============================================================
+# PRE-FLIGHT: Verify Azure session is active
+# ============================================================
+$ErrorActionPreference = 'Stop'
+
+try {
+    $ctx = Get-AzContext
+    if (-not $ctx -or -not $ctx.Account) { throw "No active session" }
+    Write-Host "Authenticated as: $($ctx.Account.Id) (Tenant: $($ctx.Tenant.Id))" -ForegroundColor Green
+} catch {
+    Write-Host "ERROR: Not authenticated to Azure. Run Connect-AzAccount first." -ForegroundColor Red
+    return
+}
+
+# ============================================================
 # CONFIGURATION — adjust these as needed
 # ============================================================
 $appName          = "demo_dfir_app"
@@ -104,7 +119,6 @@ $graphPermissions = @(
     @{ Id = "72f0655d-6228-4ddc-8e1b-164973b9213b"; Name = "CopilotPackages.Read.All" }
     @{ Id = "7438b122-aefc-4978-80ed-43db9fcc7715"; Name = "Device.Read.All" }
     @{ Id = "7ab1d382-f21e-4acd-a863-ba3e13f7da61"; Name = "Directory.Read.All" }
-    @{ Id = "246dd0d5-5bd0-4def-940b-0421030a5b68"; Name = "Policy.Read.All" }
     @{ Id = "dd98c7f5-2d42-42d3-a0e4-633161547251"; Name = "ThreatHunting.Read.All" }
     @{ Id = "df021288-bdef-4463-88db-98f22de89214"; Name = "User.Read.All" }
 )
@@ -157,20 +171,27 @@ Write-Host "  Expires   : $($cert.NotAfter)" -ForegroundColor Green
 # ============================================================
 Write-Host "`n=== STEP 4: Creating client secret ===" -ForegroundColor Cyan
 
-$secretCred = New-AzADAppCredential `
-    -ApplicationId $app.AppId `
-    -StartDate (Get-Date) `
-    -EndDate (Get-Date).AddMonths($certValidMonths)
+# Use Graph API to create the secret so we can set a displayName
+$secretBody = @{
+    passwordCredential = @{
+        displayName = "demo_dfir_app_secret"
+        endDateTime = (Get-Date).AddMonths($certValidMonths).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    }
+} | ConvertTo-Json -Depth 5
+
+$secretResponse = Invoke-AzRestMethod -Uri "https://graph.microsoft.com/v1.0/applications/$($app.Id)/addPassword" -Method POST -Payload $secretBody
+$secretCred = $secretResponse.Content | ConvertFrom-Json
 
 Write-Host "Client secret created." -ForegroundColor Green
-Write-Host "  KeyId      : $($secretCred.KeyId)" -ForegroundColor Green
-Write-Host "  Secret Hint: $($secretCred.Hint)" -ForegroundColor Green
-Write-Host "  Expires    : $($secretCred.EndDateTime)" -ForegroundColor Green
+Write-Host "  KeyId      : $($secretCred.keyId)" -ForegroundColor Green
+Write-Host "  Description: $($secretCred.displayName)" -ForegroundColor Green
+Write-Host "  Secret Hint: $($secretCred.hint)" -ForegroundColor Green
+Write-Host "  Expires    : $($secretCred.endDateTime)" -ForegroundColor Green
 
 # IMPORTANT: Save the secret value now — it cannot be retrieved later
 $appRegSecPath = Join-Path $PSScriptRoot "appRegSec.json"
-if ($secretCred.SecretText) {
-    $clientSecret = $secretCred.SecretText
+if ($secretCred.secretText) {
+    $clientSecret = $secretCred.secretText
 
     # Write client secret and client ID to JSON for later use
     @{
