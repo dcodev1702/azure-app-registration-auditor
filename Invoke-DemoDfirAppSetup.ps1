@@ -16,7 +16,7 @@
         7. Demonstrates authentication using both certificate and secret
 
 .NOTES
-    File Name : New-DemoDfirAppSetup.ps1
+    File Name : Invoke-DemoDfirAppSetup.ps1
     Authors   : DCODEV1702 & Claude Opus 4.6
     Date      : 2026-02-21
     Version   : 1.0.0
