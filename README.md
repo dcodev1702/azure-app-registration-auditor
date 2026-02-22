@@ -1,6 +1,6 @@
-# Azure App Registration & Entra ID Auditor
+# Entra App Registration Auditor
 
-A collection of PowerShell scripts for auditing Azure App Registrations, Entra ID users, and RBAC role assignments. Designed for security professionals, cloud administrators, and incident responders who need quick visibility into their Azure tenant's identity and access posture.
+A collection of PowerShell scripts for auditing Entra ID App Registrations, Entra ID users, and RBAC role assignments. Designed for security professionals, cloud administrators, and incident responders who need quick visibility into their Azure tenant's identity and access posture.
 
 ---
 
