@@ -4,9 +4,6 @@ A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint
 
 ![image](https://github.com/user-attachments/assets/d07ae2a0-b827-41d9-9679-ad74e930a3b8)
 
-
-<!-- ![image](https://github.com/user-attachments/assets/1666be84-a969-4405-b0ff-078c3f0fc2ed) -->
-
 ---
 
 ## What It Does
