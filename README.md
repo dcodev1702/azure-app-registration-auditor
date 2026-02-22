@@ -303,6 +303,8 @@ storageOps
 | order by StorageTime asc
 ```
 
+![image](https://github.com/user-attachments/assets/3185a91d-c05e-432d-bbbf-c1f630832327)
+
 **Why this matters for DFIR:** If an attacker compromises a client secret or exports a certificate private key, this join tells you:
 - **Which credential** was used (cert or secret, by KeyId)
 - **From where** (IP address correlation)
