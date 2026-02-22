@@ -4,8 +4,10 @@ A collection of PowerShell scripts for auditing Azure App Registrations, Entra I
 
 ---
 
-## 🏆 Digital Forensics / Incident Response (DFIR) PoC <br/>
+## 🏆 Digital Forensics / Incident Response (DFIR) PoC
 `New-DemoDfirAppSetup.ps1`
+
+---
 
 This script creates a fully functional proof-of-concept environment that demonstrates how app registrations use secrets and certificates to authenticate, and why auditing them matters from a DFIR perspective.
 
