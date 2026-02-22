@@ -6,6 +6,11 @@ A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint
 
 ---
 
+Audit Trail of Service Principal Auth via KQL
+
+![image](https://github.com/user-attachments/assets/245da5cf-1e3d-4dac-9417-f73772242ba3)
+
+
 ## What It Does
 
 1. **Authenticates** as a service principal using credentials from `appConfig.json` via `Connect-AzAccount`.
