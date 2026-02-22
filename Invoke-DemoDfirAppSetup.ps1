@@ -193,10 +193,11 @@ $appRegSecPath = Join-Path $PSScriptRoot "appRegSec.json"
 if ($secretCred.secretText) {
     $clientSecret = $secretCred.secretText
 
-    # Write client secret and client ID to JSON for later use
+    # Write client secret, client ID, and tenant ID to JSON for later use
     @{
         client_secret = $clientSecret
         client_id     = $app.AppId
+        tenant_id     = (Get-AzContext).Tenant.Id
     } | ConvertTo-Json | Set-Content -Path $appRegSecPath -Encoding UTF8
 
     Write-Host "  Secret written to: $appRegSecPath" -ForegroundColor Green
