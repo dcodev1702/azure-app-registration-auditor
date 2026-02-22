@@ -235,7 +235,7 @@ Connect-AzAccount
 Connect-AzAccount -TenantId "your-tenant-id"
 ```
 
-> [!Note]
+> [!NOTE]
 >  `Invoke-AzRestMethod` is used internally to call the Microsoft Graph API for directory role lookups. This works transparently through your existing `Connect-AzAccount` session — no separate `Connect-MgGraph` or Microsoft Graph SDK modules are required.
 
 ### Required Permissions
