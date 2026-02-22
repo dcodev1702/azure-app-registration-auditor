@@ -6,10 +6,6 @@ A PowerShell 7 script that dynamically discovers Microsoft Defender for Endpoint
 
 ---
 
-Audit Trail of Service Principal Auth via KQL
-
-![image](https://github.com/user-attachments/assets/245da5cf-1e3d-4dac-9417-f73772242ba3)
-
 
 ## What It Does
 
@@ -34,7 +30,24 @@ Audit Trail of Service Principal Auth via KQL
 
 ### Isolation Exclusions
 
-Certain devices (e.g., `blueDomainServer`) are configured as exclusions and cannot be isolated through the script. They can still be unisolated if needed.
+Certain devices are configured as exclusions and **cannot be isolated** through the script. They can still be unisolated if needed.
+
+The exclusion list is defined at the top of `mde_device_actions.ps1`:
+
+```powershell
+$isolationExclusions = @(
+    'bluedc-01.contoso.range'
+)
+```
+
+**How it works:**
+- When the user selects **Isolate a device** from the action menu, the script filters out any device whose `DeviceName` matches an entry in `$isolationExclusions`.
+- Excluded devices are silently removed from the isolation candidate list — they simply don't appear as options.
+- This is a **one-way protection**: excluded devices can still be **unisolated** if they were previously isolated through another method (e.g., the Defender portal or a different script).
+- To add or remove exclusions, edit the `$isolationExclusions` array. Use the full FQDN (e.g., `bluedc-01.contoso.range`) to match exactly.
+
+> [!IMPORTANT]
+> Exclusions are enforced **only within this script**. They do not prevent isolation via the Defender portal, Microsoft Graph API, or other automation tools. This is a safety guard for domain controllers and critical infrastructure servers that should never be network-isolated during an investigation.
 
 ---
 
@@ -77,7 +90,7 @@ Create an `appConfig.json` file in the same directory as the script with your ap
 }
 ```
 
-> [!note]
+> [!NOTE]
 > Do not commit `appConfig.json` to source control. Add it to your `.gitignore`.
 
 ---
@@ -108,6 +121,66 @@ MDE API enforces rate limits of **100 calls/minute** and **1,500 calls/hour**. T
 
 ---
 
+## 🔍 Forensic Correlation — KQL Queries
+
+The service principal's activity across Microsoft Graph, MDE API, and Azure Resource Manager is fully auditable via KQL. The following queries correlate `AADServicePrincipalSignInLogs` with downstream service logs to build a complete forensic timeline.
+
+### Correlating Graph API Activity
+
+Every Microsoft Graph call made by the service principal (e.g., advanced hunting queries, directory role checks) is captured in `MicrosoftGraphActivityLogs`. Join on the token identifier to see the exact Graph endpoint called:
+
+```kusto
+// Graph API calls made by the service principal
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where AppId == "<your-app-id>"
+| where ResourceDisplayName == "Microsoft Graph"
+| join kind=inner (
+    MicrosoftGraphActivityLogs
+    | where TimeGenerated > ago(7d)
+) on $left.UniqueTokenIdentifier == $right.SignInActivityId
+| project TimeGenerated, ServicePrincipalName, ClientCredentialType,
+          RequestMethod, RequestUri, ResponseStatusCode, IPAddress
+```
+
+**What you'll see:** Each row shows the exact Graph REST endpoint the SP called — for example `POST /security/runHuntingQuery` (advanced hunting), `GET /roleManagement/directory/roleAssignments` (GA role check), or `GET /servicePrincipals` (SP lookup).
+
+![Graph API Activity](https://github.com/user-attachments/assets/245da5cf-1e3d-4dac-9417-f73772242ba3)
+
+### Correlating MDE / Defender XDR Activity
+
+MDE API calls (device isolation, machine listing) are captured in `CloudAppEvents` when app governance is enabled. Join on the service principal's object ID:
+
+```kusto
+// MDE API actions correlated with SP sign-ins
+AADServicePrincipalSignInLogs
+| where TimeGenerated > ago(7d)
+| where AppId == "<your-app-id>"
+| join kind=inner (
+    CloudAppEvents
+    | where TimeGenerated > ago(7d)
+) on $left.AppId == $right.ObjectId
+```
+
+**What you'll see:** Actions like device isolation/unisolation, machine queries, and any Defender XDR operations performed by the service principal — correlated with the sign-in event that authorized them.
+
+### Full Cross-Service Timeline
+
+Combine all sources into a unified timeline showing every action the service principal took across all Azure and M365 services:
+
+| SP Signs Into | `ResourceDisplayName` | Correlate With | Join Key |
+|---|---|---|---|
+| Graph API | `Microsoft Graph` | `MicrosoftGraphActivityLogs` | `UniqueTokenIdentifier` = `SignInActivityId` |
+| ARM | `Windows Azure Service Management API` | `AzureActivity` | `AppId` = `Caller` |
+| MDE API | `Windows Defender ATP` | `CloudAppEvents` | `AppId` = `ObjectId` |
+| Storage | `Azure Storage` | `StorageBlobLogs` | `AppId` = `RequesterAppId` |
+| Entra ID changes | N/A (directory ops) | `AuditLogs` | `AppId` = `InitiatedBy.app.appId` |
+
+> [!TIP]
+> The `ClientCredentialType` column in `AADServicePrincipalSignInLogs` distinguishes `Certificate` vs `ClientSecret` for **every** service call — not just storage. If an attacker steals a secret and uses it to isolate a device, the sign-in log shows exactly which credential was used, from which IP, and at what time.
+
+---
+
 ## Reference Links
 
 | Resource | URL |
@@ -120,5 +193,8 @@ MDE API enforces rate limits of **100 calls/minute** and **1,500 calls/hour**. T
 | MDE Machine actions API | https://learn.microsoft.com/en-us/defender-endpoint/api/get-machineaction-object |
 | MDE List machines API | https://learn.microsoft.com/en-us/defender-endpoint/api/get-machines |
 | Graph Advanced Hunting API | https://learn.microsoft.com/en-us/graph/api/security-security-runhuntingquery |
+| MicrosoftGraphActivityLogs | https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/microsoftgraphactivitylogs |
+| AADServicePrincipalSignInLogs | https://learn.microsoft.com/en-us/azure/azure-monitor/reference/tables/aadserviceprincipalsigninlogs |
+| CloudAppEvents | https://learn.microsoft.com/en-us/defender-xdr/advanced-hunting-cloudappevents-table |
 | Azure App Registration | https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade |
 | Az.Accounts module | https://learn.microsoft.com/en-us/powershell/module/az.accounts |
