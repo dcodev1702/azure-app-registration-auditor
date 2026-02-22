@@ -64,7 +64,8 @@ Entra ID supports two permission models for app registrations:
 
 All permissions are granted with **admin consent** so the service principal can operate without user interaction.
 
-> **Example — `ThreatHunting.Read.All`:** This scope enables the app to call `POST /security/runHuntingQuery` against the [Microsoft Graph Security API](https://learn.microsoft.com/en-us/graph/api/security-security-runhuntingquery), executing KQL queries against Microsoft Defender XDR advanced hunting tables programmatically. This is particularly valuable for automated DFIR workflows and integration with Copilot for Security.
+> [!EXAMPLE]
+>  — `ThreatHunting.Read.All`:** This scope enables the app to call `POST /security/runHuntingQuery` against the [Microsoft Graph Security API](https://learn.microsoft.com/en-us/graph/api/security-security-runhuntingquery), executing KQL queries against Microsoft Defender XDR advanced hunting tables programmatically. This is particularly valuable for automated DFIR workflows and integration with Copilot for Security.
 
 The storage account access is controlled via Azure RBAC (`Storage Blob Data Contributor`), not Graph API permissions — this is the recommended pattern for Azure resource access.
 
