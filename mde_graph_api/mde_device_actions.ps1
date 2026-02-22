@@ -52,7 +52,7 @@ $ErrorActionPreference = 'Stop'
 
 # Machines that must never be isolated (can still be unisolated if needed)
 $isolationExclusions = @(
-    'blueDomainServer'
+    'bluedc-01.contoso.local'
 )
 
 # ── 1. Load app registration config and authenticate ──────────────────────────
