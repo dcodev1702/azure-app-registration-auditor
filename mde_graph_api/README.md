@@ -79,7 +79,7 @@ Create an `appConfig.json` file in the same directory as the script with your ap
 ## Usage
 
 ```powershell
-./action-devices.ps1
+./mde_device_actions.ps1
 ```
 
 The script will authenticate, discover devices, display sensor information, check isolation status, and present an action menu:
