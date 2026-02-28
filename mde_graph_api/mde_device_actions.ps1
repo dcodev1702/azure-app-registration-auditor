@@ -3,7 +3,7 @@
 
 <#
 .SYNOPSIS
-    Date: 22 Feb 2026
+    Date: 28 Feb 2026
     Authors: DCODEV1702 & Claude Opus 4.6
     
     Manages isolation state for MDE-enrolled devices and displays real-time
@@ -11,38 +11,38 @@
 
 .DESCRIPTION
     1. Loads app registration credentials from appConfig.json and authenticates
-       as a service principal via Azure (Connect-AzAccount).
+    as a service principal via Azure (Connect-AzAccount).
     2. Checks whether the service principal holds the Global Administrator role.
     3. Acquires a separate MDE API token using OAuth2 client credentials.
     4. Looks up all monitored machines via the MDE REST API, preferring FQDN
-       records (*.contoso.range) over short-name entries.
+    records (*.contoso.range) over short-name entries.
     5. Queries Microsoft Graph Advanced Hunting (KQL) to dynamically discover
-       onboarded "blue*" devices and retrieve:
-       - MDE sensor version (from DeviceTvmSoftwareInventory)
-       - Sensor health state, onboarding status, OS platform, and OS version
-         (from DeviceInfo)
-       Duplicate device entries are deduplicated by preferring FQDN records
-       and Active sensor health over Inactive. Devices reporting sensor
-       version 1.0 are excluded from display.
+    onboarded "blue*" devices and retrieve:
+    - MDE sensor version (from DeviceTvmSoftwareInventory)
+    - Sensor health state, onboarding status, OS platform, and OS version
+        (from DeviceInfo)
+    Duplicate device entries are deduplicated by preferring FQDN records
+    and Active sensor health over Inactive. Devices reporting sensor
+    version 1.0 are excluded from display.
     6. Checks each device's isolation status via the MDE machine actions API
-       and displays color-coded results (yellow = isolated, green = not isolated).
+    and displays color-coded results (yellow = isolated, green = not isolated).
     7. Presents an interactive menu allowing the operator to:
-       - Isolate a non-isolated device (Full isolation)
-       - Unisolate an isolated device
-       Certain devices (e.g., blueDomainServer) are excluded from isolation.
-       ClientVersionNotSupported errors are handled gracefully.
+    - Isolate a non-isolated device (Full isolation)
+    - Unisolate an isolated device
+    Certain devices (e.g., blueDomainServer) are excluded from isolation.
+    ClientVersionNotSupported errors are handled gracefully.
 
 .NOTES
     Required permissions (WindowsDefenderATP, Application):
-      - Machine.Read.All     — list machines and query machine actions
-      - Machine.Isolate      — isolate and unisolate machines
+    - Machine.Read.All     — list machines and query machine actions
+    - Machine.Isolate      — isolate and unisolate machines
 
     Required permissions (Microsoft Graph, Application):
-      - ThreatHunting.Read.All       — Advanced Hunting queries for sensor info
-      - RoleManagement.Read.Directory — Global Administrator role check (optional)
+    - ThreatHunting.Read.All       — Advanced Hunting queries for sensor info
+    - RoleManagement.Read.Directory — Global Administrator role check (optional)
 
     An appConfig.json file must exist alongside this script with the following keys:
-      client_id, client_secret, tenant_id, subscription_id
+    client_id, client_secret, tenant_id, subscription_id
 
     MDE API rate limits: 100 calls/min, 1500 calls/hr.
 #>
@@ -73,8 +73,7 @@ $secureSecret = ConvertTo-SecureString $clientSecret -AsPlainText -Force
 $credential   = [PSCredential]::new($clientId, $secureSecret)
 
 Write-Host "Authenticating as app registration (Client ID: $clientId) ..."
-Connect-AzAccount -ServicePrincipal -Credential $credential `
-                  -Tenant $tenantId | Out-Null
+Connect-AzAccount -ServicePrincipal -Credential $credential -Tenant $tenantId | Out-Null
 
 $azCtx     = Get-AzContext
 $accountId = $azCtx.Account.Id
@@ -83,13 +82,38 @@ Write-Host "Tenant ID       " -ForegroundColor Green -NoNewline; Write-Host ": $
 Write-Host "Subscription ID " -ForegroundColor Green -NoNewline; Write-Host ": $subscriptionId"
 Write-Host "Client ID       " -ForegroundColor Green -NoNewline; Write-Host ": $clientId"
 
-# ── 1b. Check for active Global Administrator role ────────────────────────────
+# ── 1b. Acquire Microsoft Graph token (client credentials) ───────────────────
+# Direct OAuth2 token avoids Az module's CAE-aware token handling that triggers
+# InteractionRequired challenges under location-based Conditional Access policies.
 
-$spObj     = Get-AzADServicePrincipal -ApplicationId $clientId
-$spId      = $spObj.Id
+$graphTokenUri  = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+$graphTokenBody = @{
+    client_id     = $clientId
+    client_secret = $clientSecret
+    scope         = 'https://graph.microsoft.com/.default'
+    grant_type    = 'client_credentials'
+}
+
+Write-Host "Acquiring Microsoft Graph API token ..."
+$graphTokenResp = Invoke-RestMethod -Method POST -Uri $graphTokenUri -Body $graphTokenBody -ContentType 'application/x-www-form-urlencoded'
+$graphHeaders   = @{
+    Authorization  = "Bearer $($graphTokenResp.access_token)"
+    'Content-Type' = 'application/json'
+}
+Write-Host "Microsoft Graph API token acquired."
+Write-Host ""
+
+# ── 1c. Check for active Global Administrator role ────────────────────────────
+
+$spResp    = Invoke-RestMethod -Method GET -Uri "https://graph.microsoft.com/v1.0/servicePrincipals?`$filter=appId eq '$clientId'" -Headers $graphHeaders
+$spObj     = $spResp.value | Select-Object -First 1
+if (-not $spObj) {
+    throw "No service principal found for appId '$clientId'."
+}
+$spId = $spObj.id
 $rolesUri  = "https://graph.microsoft.com/v1.0/roleManagement/directory/roleAssignments?`$filter=principalId eq '$spId'&`$expand=roleDefinition"
-$rolesResp = Invoke-AzRestMethod -Method GET -Uri $rolesUri
-$roles     = ($rolesResp.Content | ConvertFrom-Json).value
+$rolesResp = Invoke-RestMethod -Method GET -Uri $rolesUri -Headers $graphHeaders
+$roles     = $rolesResp.value
 
 $gaRole = $roles | Where-Object { $_.roleDefinition.displayName -eq 'Global Administrator' }
 if ($gaRole) {
@@ -100,7 +124,7 @@ if ($gaRole) {
 
 Write-Host ""
 
-# ── 1c. Acquire MDE API token (client credentials) ───────────────────────────
+# ── 1d. Acquire MDE API token (client credentials) ───────────────────────────
 
 $mdeTokenUri  = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
 $mdeTokenBody = @{
@@ -125,11 +149,10 @@ $mdeApiBase = 'https://api.securitycenter.microsoft.com/api'
 
 $graphHuntUri = 'https://graph.microsoft.com/v1.0/security/runHuntingQuery'
 
-# Dynamically discover onboarded "blue*" devices and get sensor info via
+# Dynamically discover onboarded devices and get sensor info via
 # DeviceTvmSoftwareInventory joined with DeviceInfo.
 $sensorQuery = @"
 let enrolledDevices = DeviceInfo
-| where DeviceName startswith "blue"
 | where OnboardingStatus == "Onboarded"
 | distinct DeviceName;
 let sensorVersions = DeviceTvmSoftwareInventory
@@ -148,52 +171,47 @@ DeviceInfo
 Write-Host "Discovering enrolled devices via Advanced Hunting ..."
 
 $sensorBody = @{ Query = $sensorQuery } | ConvertTo-Json
-$sensorResp = Invoke-AzRestMethod -Method POST -Uri $graphHuntUri -Payload $sensorBody
+$sensorResp = Invoke-RestMethod -Method POST -Uri $graphHuntUri -Headers $graphHeaders -Body $sensorBody
 
 # Deduplicate and display sensor info, then extract device names for MDE lookup
 $dedupedResults = @()
 
-if ($sensorResp.StatusCode -eq 200) {
-    $sensorData = ($sensorResp.Content | ConvertFrom-Json)
-    if ($sensorData.results -and $sensorData.results.Count -gt 0) {
-        # Deduplicate: prefer FQDN (contoso.range) over short name, then Active over Inactive
-        $shortNameKey = { ($_.DeviceName -split '\.')[0].ToLower() }
-        $grouped = $sensorData.results | Group-Object -Property $shortNameKey
-        $dedupedResults = @(foreach ($g in $grouped) {
-            if ($g.Count -gt 1) {
-                # Prefer the FQDN entry (contains contoso.range)
-                $fqdn = $g.Group | Where-Object { $_.DeviceName -match '\.contoso\.range' }
-                $pool = if ($fqdn) { @($fqdn) } else { @($g.Group) }
-                # Then prefer Active over Inactive
-                $active = $pool | Where-Object { $_.SensorHealthState -eq 'Active' }
-                if ($active) { $active | Select-Object -First 1 } else { $pool | Select-Object -First 1 }
-            } else {
-                $g.Group[0]
-            }
-        })
-
-        Write-Host ""
-        Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
-        Write-Host " MDE SENSOR INFORMATION" -ForegroundColor Cyan
-        Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
-        Write-Host ("{0,-30} {1,-22} {2,-16} {3,-14} {4}" -f "Device", "Sensor Version", "Sensor Health", "Onboarding", "OS")
-        Write-Host ("{0,-30} {1,-22} {2,-16} {3,-14} {4}" -f "------", "--------------", "-------------", "----------", "--")
-        foreach ($s in $dedupedResults) {
-            $sensorVer = if ($s.SensorVersion) { $s.SensorVersion } else { '(unknown)' }
-            if ($sensorVer -eq '1.0') { continue }
-            $healthColor = if ($s.SensorHealthState -eq 'Active') { 'Green' } else { 'Red' }
-            $onboardColor = if ($s.OnboardingStatus -eq 'Onboarded') { 'Cyan' } else { 'Red' }
-            Write-Host ("{0,-30} {1,-22} " -f $s.DeviceName, $sensorVer) -NoNewline
-            Write-Host ("{0,-16} " -f $s.SensorHealthState) -ForegroundColor $healthColor -NoNewline
-            Write-Host ("{0,-14} " -f $s.OnboardingStatus) -ForegroundColor $onboardColor -NoNewline
-            Write-Host ("$($s.OSPlatform) $($s.OSVersion)")
+if ($sensorResp.results -and $sensorResp.results.Count -gt 0) {
+    # Deduplicate: prefer FQDN (contoso.range) over short name, then Active over Inactive
+    $shortNameKey = { ($_.DeviceName -split '\.')[0].ToLower() }
+    $grouped = $sensorResp.results | Group-Object -Property $shortNameKey
+    $dedupedResults = @(foreach ($g in $grouped) {
+        if ($g.Count -gt 1) {
+            # Prefer the FQDN entry (contains contoso.range)
+            $fqdn = $g.Group | Where-Object { $_.DeviceName -match '\.contoso\.range' }
+            $pool = if ($fqdn) { @($fqdn) } else { @($g.Group) }
+            # Then prefer Active over Inactive
+            $active = $pool | Where-Object { $_.SensorHealthState -eq 'Active' }
+            if ($active) { $active | Select-Object -First 1 } else { $pool | Select-Object -First 1 }
+        } else {
+            $g.Group[0]
         }
-        Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
-    } else {
-        Write-Host "  No enrolled devices found via Advanced Hunting."
+    })
+
+    Write-Host ""
+    Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
+    Write-Host " MDE SENSOR INFORMATION" -ForegroundColor Cyan
+    Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
+    Write-Host ("{0,-30} {1,-22} {2,-16} {3,-14} {4}" -f "Device", "Sensor Version", "Sensor Health", "Onboarding", "OS")
+    Write-Host ("{0,-30} {1,-22} {2,-16} {3,-14} {4}" -f "------", "--------------", "-------------", "----------", "--")
+    foreach ($s in $dedupedResults) {
+        $sensorVer = if ($s.SensorVersion) { $s.SensorVersion } else { '(unknown)' }
+        if ($sensorVer -eq '1.0') { continue }
+        $healthColor = if ($s.SensorHealthState -eq 'Active') { 'Green' } else { 'Red' }
+        $onboardColor = if ($s.OnboardingStatus -eq 'Onboarded') { 'Cyan' } else { 'Red' }
+        Write-Host ("{0,-30} {1,-22} " -f $s.DeviceName, $sensorVer) -NoNewline
+        Write-Host ("{0,-16} " -f $s.SensorHealthState) -ForegroundColor $healthColor -NoNewline
+        Write-Host ("{0,-14} " -f $s.OnboardingStatus) -ForegroundColor $onboardColor -NoNewline
+        Write-Host ("$($s.OSPlatform) $($s.OSVersion)")
     }
+    Write-Host "════════════════════════════════════════════════════════════════════════════════════════"
 } else {
-    Write-Host "  WARNING: Could not query enrolled devices (HTTP $($sensorResp.StatusCode)). Continuing without sensor info."
+    Write-Host "  No enrolled devices found via Advanced Hunting."
 }
 
 Write-Host ""
@@ -247,8 +265,8 @@ foreach ($device in $devices) {
 
     # Query the most recent isolate/unisolate action for this machine
     $actionsUri  = "$mdeApiBase/machineactions?`$filter=machineId+eq+'$devId'" +
-                   "+and+(type+eq+'Isolate'+or+type+eq+'Unisolate')" +
-                   "&`$orderby=creationDateTimeUtc+desc&`$top=1"
+                "+and+(type+eq+'Isolate'+or+type+eq+'Unisolate')" +
+                "&`$orderby=creationDateTimeUtc+desc&`$top=1"
     $actionsResp = Invoke-RestMethod -Method GET -Uri $actionsUri -Headers $mdeHeaders
 
     if ($actionsResp.value -and $actionsResp.value.Count -gt 0) {
@@ -336,8 +354,7 @@ switch ($action) {
 
         $unisolateUri  = "https://api.securitycenter.microsoft.com/api/machines/$targetId/unisolate"
         $unisolateBody = @{
-            Comment = "Unisolating $targetName via automated PowerShell script. " +
-                      "Initiated by $accountId on $(Get-Date -Format 'u')."
+            Comment = "Unisolating $targetName via automated PowerShell script. Initiated by $accountId on $(Get-Date -Format 'u')."
         } | ConvertTo-Json
 
         Write-Host "Sending unisolate request for '$targetName' ..."
